@@ -86,6 +86,7 @@
             $(window) : this.$container.closest(this.options.scroll_container);
         this.is_dragging = false;
         this.player_min_left = 0 + this.options.offset_left;
+        this.player_min_top = 0 + this.options.offset_top;
         this.id = uniqId();
         this.ns = '.gridster-draggable-' + this.id;
         this.init();
@@ -173,6 +174,11 @@
             } else if(left < this.player_min_left) {
                 left = this.player_min_left;
             }
+            if (top > this.player_max_top) {
+                top = this.player_max_top;
+            } else if(top < this.player_min_top) {
+                top = this.player_min_top;
+            }
         }
 
         return {
@@ -201,12 +207,16 @@
     };
 
 
-    fn.set_limits = function(container_width) {
+    fn.set_limits = function(container_width, container_height) {
         container_width || (container_width = this.$container.width());
+        container_height || (container_height = this.$container.height());
         this.player_max_left = (container_width - this.player_width +
             - this.options.offset_left);
+        this.player_max_top = (container_height - this.player_height +
+            - this.options.offset_top);
 
         this.options.container_width = container_width;
+        this.options.container_height = container_height;
 
         return this;
     };
@@ -344,8 +354,9 @@
         this.scroll_container_offset_x = this.$scroll_container.scrollLeft();
         this.el_init_offset = this.$player.offset();
         this.player_width = this.$player.width();
+        this.player_height = this.$player.height();
 
-        this.set_limits(this.options.container_width);
+        this.set_limits(this.options.container_width, this.options.container_height);
 
         if (this.options.start) {
             this.options.start.call(this.$player, e, this.get_drag_data(e));

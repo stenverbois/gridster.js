@@ -1647,6 +1647,7 @@
 		this.resize_initial_last_col = this.get_highest_occupied_cell().col;
 
 		this.set_dom_grid_width(this.cols);
+		this.set_dom_grid_height(this.rows);
 
 		this.resize_dir = {
 			right: ui.$player.is('.' + this.resize_handle_class + '-x'),
