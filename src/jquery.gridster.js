@@ -3640,16 +3640,24 @@
 	 * @method set_dom_grid_height
 	 * @return {Object} Returns the instance of the Gridster class.
 	 */
-	fn.set_dom_grid_height = function (height) {
-		if (typeof height === 'undefined') {
-			var r = this.get_highest_occupied_cell().row;
-			height = ((r + 1) * this.options.widget_margins[1]) + (r * this.min_widget_height);
+	 fn.set_dom_grid_height = function (rows) {
+		if (typeof rows === 'undefined') {
+			rows = this.get_highest_occupied_cell().row;
 		}
 
-		this.container_height = height;
+		var max_rows = (this.options.max_rows === Infinity ? this.options.max_rows : this.rows);
+
+		rows = Math.min(max_rows, Math.max(rows, this.options.min_rows));
+		this.container_height = ((rows + 1) * this.options.widget_margins[1]) + (rows * this.min_widget_height);
+		if (this.is_responsive()) {
+			this.$el.css({'min-height': '100%', 'max-height': '100%'});
+			return this; //if we are responsive exit before setting the height of $el
+		}
 		this.$el.css('height', this.container_height);
+
 		return this;
-	};
+ 	};
+
 
 	/**
 	 * Set the current width of the parent grid.
