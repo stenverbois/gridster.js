@@ -41,6 +41,7 @@
 				scroll_container: window,
 				shift_larger_widgets_down: true,
 				shift_widgets_up: true,
+        auto_move_widgets: true,
 				show_element: function($el, callback) {
 					if (callback) {
 						$el.fadeIn(callback);
@@ -2983,32 +2984,36 @@
 			return false;
 		} //break;
 
-		this.for_each_column_occupied(el_grid_data, function (col) {
-			// can_go_up
-			if ($.inArray($widget, moved) === -1) {
-				var widget_grid_data = $widget.coords().grid;
-				var next_row = actual_row - y_units;
-				next_row = this.can_go_up_to_row(
-						widget_grid_data, col, next_row);
 
-				if (!next_row) {
-					return true;
-				}
+    // This pushes widgets up if a widget in the same lane is moved (CUSTOM)
+    if(this.options.auto_move_widgets) {
+      this.for_each_column_occupied(el_grid_data, function (col) {
+        // can_go_up
+        if ($.inArray($widget, moved) === -1) {
+          var widget_grid_data = $widget.coords().grid;
+          var next_row = actual_row - y_units;
+          next_row = this.can_go_up_to_row(
+            widget_grid_data, col, next_row);
 
-				this.remove_from_gridmap(widget_grid_data);
-				widget_grid_data.row = next_row;
-				this.add_to_gridmap(widget_grid_data);
-				$widget.attr('data-row', widget_grid_data.row);
-				this.$changed = this.$changed.add($widget);
+          if (!next_row) {
+            return true;
+          }
 
-				moved.push($widget);
+          this.remove_from_gridmap(widget_grid_data);
+          widget_grid_data.row = next_row;
+          this.add_to_gridmap(widget_grid_data);
+          $widget.attr('data-row', widget_grid_data.row);
+          this.$changed = this.$changed.add($widget);
 
-				/* $next_widgets.each($.proxy(function(i, widget) {
-				 console.log('from_within_move_widget_up');
-				 this.move_widget_up($(widget), y_units);
-				 }, this)); */
-			}
-		});
+          moved.push($widget);
+
+          /* $next_widgets.each($.proxy(function(i, widget) {
+           console.log('from_within_move_widget_up');
+           this.move_widget_up($(widget), y_units);
+           }, this)); */
+        }
+      });
+    }
 
 	};
 
