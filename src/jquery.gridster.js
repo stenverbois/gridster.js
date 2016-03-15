@@ -40,6 +40,7 @@
 				responsive_breakpoint: false,
 				scroll_container: window,
 				shift_larger_widgets_down: true,
+				move_widgets_down_only: false,
 				shift_widgets_up: true,
         auto_move_widgets: true,
 				show_element: function($el, callback) {
@@ -185,6 +186,7 @@
 			this.min_widget_width = this.options.widget_base_dimensions[0];
 		}
 		this.min_widget_height = this.options.widget_base_dimensions[1];
+		this.is_resizing = false;
 
 		this.min_col_count = this.options.min_cols;
 		this.prev_col_count = this.min_col_count;
@@ -550,6 +552,7 @@
 	 */
 	fn.resize_widget = function ($widget, size_x, size_y, callback) {
 		var wgd = $widget.coords().grid;
+		this.is_resizing = true;
 
 		size_x || (size_x = wgd.size_x);
 		size_y || (size_y = wgd.size_y);
@@ -579,6 +582,8 @@
 		if (callback) {
 			callback.call(this, new_grid_data.size_x, new_grid_data.size_y);
 		}
+
+		this.is_resizing = false;
 
 		return $widget;
 	};
@@ -792,45 +797,6 @@
 
 
 	/**
-	 * Change the dimensions of widgets.
-	 *
-	 * @method resize_widget_dimensions
-	 * @param {Object} [options] An Object with all options you want to
-	 *        overwrite:
-	 *    @param {Array} [options.widget_margins] Margin between widgets.
-	 *     The first index for the horizontal margin (left, right) and
-	 *     the second for the vertical margin (top, bottom).
-	 *    @param {Array} [options.widget_base_dimensions] Base widget dimensions
-	 *     in pixels. The first index for the width and the second for the
-	 *     height.
-	 * @return {Class} Returns the instance of the Gridster Class.
-	 */
-	fn.resize_widget_dimensions = function (options) {
-		if (options.widget_margins) {
-			this.options.widget_margins = options.widget_margins;
-		}
-
-		if (options.widget_base_dimensions) {
-			this.options.widget_base_dimensions = options.widget_base_dimensions;
-		}
-
-		this.min_widget_width = (this.options.widget_margins[0] * 2) + this.options.widget_base_dimensions[0];
-		this.min_widget_height = (this.options.widget_margins[1] * 2) + this.options.widget_base_dimensions[1];
-
-		this.$widgets.each($.proxy(function (i, widget) {
-			var $widget = $(widget);
-			this.resize_widget($widget);
-		}, this));
-
-		this.generate_grid_and_stylesheet();
-		this.get_widgets_from_DOM();
-		this.set_dom_grid_height();
-
-		return this;
-	};
-
-
-	/**
 	 * Mutate widget dimensions and position in the grid map.
 	 *
 	 * @method mutate_widget_in_gridmap
@@ -962,7 +928,9 @@
 			this.move_widget_down($w, diff);
 		}, this));
 
-		this.set_dom_grid_height();
+		if (!this.is_resizing) {
+			this.set_dom_grid_height();
+		}
 
 		return this;
 	};
@@ -1569,13 +1537,23 @@
 
 		this.$changed = this.$changed.add(this.$player);
 
-		// move the cells down if there is an overlap and we are in static mode
-		if (this.options.collision.wait_for_mouseup) {
-			this.for_each_cell_occupied(this.placeholder_grid_data, function (tcol, trow) {
-				if (this.is_widget(tcol, trow)) {
-					this.move_widget_down(this.is_widget(tcol, trow), this.placeholder_grid_data.size_y);
-				}
-			});
+	    //If widget has new position, clean previous grid
+		if (this.placeholder_grid_data.el.coords().grid.col !== this.placeholder_grid_data.col ||
+            this.placeholder_grid_data.el.coords().grid.row !== this.placeholder_grid_data.row) {
+		    this.update_widget_position(this.placeholder_grid_data.el.coords().grid, false);
+
+		    // move the cells down if there is an overlap and we are in static mode
+		    if (this.options.collision.wait_for_mouseup) {
+		        this.for_each_cell_occupied(this.placeholder_grid_data, function (tcol, trow) {
+		            if (this.is_widget(tcol, trow)) {
+		                // get number of cells to move
+		                var destinyRow = this.placeholder_grid_data.row + this.placeholder_grid_data.size_y;
+		                var currentOverlappedRow = parseInt(this.gridmap[tcol][trow][0].getAttribute('data-row'));
+		                var cellsToMove = destinyRow - currentOverlappedRow;
+		                this.move_widget_down(this.is_widget(tcol, trow), cellsToMove);
+		            }
+		        });
+		    }
 		}
 
 		this.cells_occupied_by_player = this.get_cells_occupied(this.placeholder_grid_data);
@@ -1587,10 +1565,6 @@
 		this.$player.coords().grid.row = row;
 		this.$player.coords().grid.col = col;
 
-		if (this.options.draggable.stop) {
-			this.options.draggable.stop.call(this, event, ui);
-		}
-
 		this.$player.addClass('player-revert').removeClass('player')
 				.attr({
 					'data-col': col,
@@ -1599,6 +1573,10 @@
 					'left': '',
 					'top': ''
 				});
+				
+		if (this.options.draggable.stop) {
+			this.options.draggable.stop.call(this, event, ui);
+		}
 
 		this.$preview_holder.remove();
 
@@ -1908,9 +1886,6 @@
 	fn.set_player = function (col, row, no_player) {
 		var self = this;
 		var swap = false;
-		if (!no_player) {
-			this.empty_cells_player_occupies();
-		}
 		var cell = !no_player ? self.colliders_data[0].el.data : {col: col};
 		var to_col = cell.col;
 		var to_row = cell.row || row;
@@ -1961,7 +1936,19 @@
 				});
 			} else if (wgd.size_x <= player_size_x && wgd.size_y <= player_size_y) {
 				if (!$gr.is_swap_occupied(placeholder_cells.cols[0], wgd.row, wgd.size_x, wgd.size_y) && !$gr.is_player_in(placeholder_cells.cols[0], wgd.row) && !$gr.is_in_queue(placeholder_cells.cols[0], wgd.row, $w)) {
-					swap = $gr.queue_widget(placeholder_cells.cols[0], wgd.row, $w);
+					if($gr.options.move_widgets_down_only){
+						$overlapped_widgets.each($.proxy(function (i, w) {
+							var $w = $(w);
+
+							if ($gr.can_go_down($w) && $w.coords().grid.row === $gr.player_grid_data.row && !$gr.is_in_queue($w.coords().grid.col, wgd.row, $w)) {
+								$gr.move_widget_down($w, $gr.player_grid_data.size_y);
+								$gr.set_placeholder(to_col, to_row);
+							}
+						}));
+					}
+					else{
+						swap = $gr.queue_widget(placeholder_cells.cols[0], wgd.row, $w);
+					}
 				}
 				else if (!$gr.is_swap_occupied(outside_col, wgd.row, wgd.size_x, wgd.size_y) && !$gr.is_player_in(outside_col, wgd.row) && !$gr.is_in_queue(outside_col, wgd.row, $w)) {
 					swap = $gr.queue_widget(outside_col, wgd.row, $w);
@@ -1973,7 +1960,19 @@
 					swap = $gr.queue_widget(wgd.col, outside_row, $w);
 				}
 				else if (!$gr.is_swap_occupied(placeholder_cells.cols[0], placeholder_cells.rows[0], wgd.size_x, wgd.size_y) && !$gr.is_player_in(placeholder_cells.cols[0], placeholder_cells.rows[0]) && !$gr.is_in_queue(placeholder_cells.cols[0], placeholder_cells.rows[0], $w)) {
-					swap = $gr.queue_widget(placeholder_cells.cols[0], placeholder_cells.rows[0], $w);
+					if($gr.options.move_widgets_down_only){
+						$overlapped_widgets.each($.proxy(function (i, w) {
+							var $w = $(w);
+
+							if ($gr.can_go_down($w) && $w.coords().grid.row === $gr.player_grid_data.row && !$gr.is_in_queue(outside_col, wgd.row, $w)) {
+								$gr.move_widget_down($w, $gr.player_grid_data.size_y);
+								$gr.set_placeholder(to_col, to_row);
+							}
+						}));
+					}
+					else{
+						swap = $gr.queue_widget(placeholder_cells.cols[0], placeholder_cells.rows[0], $w);
+					}
 				} else {
 					//in one last attempt we check for any other empty spaces
 					for (var c = 0; c < player_size_x; c++) {
@@ -3707,7 +3706,7 @@
 	 */
 	fn.get_responsive_col_width = function () {
 		var cols = this.cols || this.options.max_cols;
-		return (this.$el[0].scrollWidth - ((cols + 1) * this.options.widget_margins[0])) / cols;
+		return (this.$el[0].clientWidth - 3 - ((cols + 1) * this.options.widget_margins[0])) / cols;
 	};
 
 	/**
@@ -4051,6 +4050,9 @@
 		if (options.widget_base_dimensions) {
 			this.options.widget_base_dimensions = options.widget_base_dimensions;
 		}
+
+		this.min_widget_width = (this.options.widget_margins[0] * 2) + this.options.widget_base_dimensions[0];
+		this.min_widget_height = (this.options.widget_margins[1] * 2) + this.options.widget_base_dimensions[1];
 
 		this.$widgets.each($.proxy(function (i, widget) {
 			var $widget = $(widget);
